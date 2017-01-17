@@ -22,7 +22,9 @@ public class NetClient : MonoBehaviour {
         AddTank,
         RemoveTank,
         UpdatePositions,
+        UpdateTankPosition,
         UpdateBallPos,
+        SetMaxSpeed,
         GiveBall,
         FreeBall,
         Shoot,
@@ -45,8 +47,6 @@ public class NetClient : MonoBehaviour {
     #if !UNITY_WEBGL
     //private WebSocket socket;
     #endif
-    private string host;
-    public int port = 11011;
     private bool _run;
     private int _receivedBytes;
     private int _sentBytes;
@@ -104,7 +104,7 @@ public class NetClient : MonoBehaviour {
         _sent = 0;*/
     }
 
-    public void Connect(string host) {
+    public void Connect(ushort host) {
         connected = true;
         GameControl.Instance.Connect(host);
 
@@ -163,19 +163,19 @@ public class NetClient : MonoBehaviour {
         return _commands.ContainsKey(Cmd);
     }
 
-    public void Send(NetServer.OpCodes command) {
-        Send(command, new byte[0]);
+    public void Send(NetServer.OpCodes command, Protocal type = Protocal.Tcp) {
+        Send(command, new byte[0], type);
     }
 
-    public void Send(NetServer.OpCodes command, string data) {
-        Send(command, Encoding.UTF8.GetBytes(data));
+    public void Send(NetServer.OpCodes command, string data, Protocal type = Protocal.Tcp) {
+        Send(command, Encoding.UTF8.GetBytes(data), type);
     }
 
-    public void Send(NetServer.OpCodes command, byte[] data) {
-        Send(new Traffic(command, data));
+    public void Send(NetServer.OpCodes command, byte[] data, Protocal type = Protocal.Tcp) {
+        Send(new Traffic(command, data), type);
     }
 
-    public void Send(Traffic traffic) {
+    public void Send(Traffic traffic, Protocal type) {
         if (GameControl.Instance.IsServer) {
             //Debug.LogWarning("Processed by local server: " + traffic.serverOpCode);
             NetServer.Instance.ProcessData(0, traffic, (tr) => { NetServer.Instance.Send(0, tr); });
@@ -200,7 +200,7 @@ public class NetClient : MonoBehaviour {
                 List<byte> sendBuffer = new List<byte>();
                 sendBuffer.AddRange(new byte[] { 5, traffic.byteCommand });
                 sendBuffer.AddRange(traffic.byteData);
-                MainServerConnect.Instance.Send(sendBuffer.ToArray());
+                MainServerConnect.Instance.Send(sendBuffer.ToArray(), type);
             }
             catch(Exception e) {
                 Debug.LogErrorFormat("{0}: {1}\n{2}", e.GetType(), e.Message, e.StackTrace);
@@ -208,27 +208,6 @@ public class NetClient : MonoBehaviour {
         }
         else
             Debug.LogError("Not connected!");
-    }
-
-    public void Disconnect(bool notifyServer = true) {
-        if (GameLobby.Instance != null && GameLobby.Instance.gameObject != null) {
-            Destroy(GameLobby.Instance.gameObject);
-            GameLobby.Instance = null;
-        }
-        if (PlayerControl.Instance != null && PlayerControl.Instance.gameObject != null) {
-            PlayerControl.Instance.Close();
-            Destroy(PlayerControl.Instance.gameObject);
-            PlayerControl.Instance = null;
-        }
-        if (GamePlayClient.Instance != null) {
-            Destroy(GamePlayClient.Instance.gameObject);
-            GamePlayClient.Instance = null;
-        }
-        GameControl.Instance.GameStarted = false;
-        if (notifyServer)
-            MainServerConnect.Instance.Send(6, new byte[] { });
-        SceneManager.LoadScene(1, LoadSceneMode.Single);
-        Debug.Log("Loading lobby scene.");
     }
 
     /*public string GetDownRate() {

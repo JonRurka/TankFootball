@@ -30,6 +30,8 @@ public class MouseOrbitImproved : MonoBehaviour {
     public bool chaseFollowBehind = true;
     public float chaseRotationDamping = 10.0f;
 
+    public float Smoothing = 40;
+
     private bool transferingToFree = false;
     private float transferT = 0f;
 
@@ -62,7 +64,7 @@ public class MouseOrbitImproved : MonoBehaviour {
     }
 
     void LateUpdate() {
-        if (mouseClickEnabled && Input.GetKeyDown(KeyCode.Mouse0)) {
+        /*if (mouseClickEnabled && Input.GetKeyDown(KeyCode.Mouse0)) {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             inputEnabled = true;
@@ -72,7 +74,7 @@ public class MouseOrbitImproved : MonoBehaviour {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             inputEnabled = false;
-        }
+        }*/
 
         if (mouseClickEnabled && Input.GetMouseButtonDown(1)) {
             SetMode(true);
@@ -125,6 +127,8 @@ public class MouseOrbitImproved : MonoBehaviour {
                 else {
                     transform.rotation = rotation;
                     transform.position = position;
+                    //transform.position = Vector3.Lerp(transform.position, position, Time.deltaTime * Smoothing);
+
                 }
             }
             else {
@@ -132,10 +136,13 @@ public class MouseOrbitImproved : MonoBehaviour {
                 int dir = chaseFollowBehind ? -1 : 1;
                 Vector3 lpos = target.parent.InverseTransformPoint(transform.position);
                 float sx = Mathf.Lerp(lpos.x, 0, Time.deltaTime * chaseDamping);
-                transform.position = target.parent.TransformPoint(sx, chaseHeight, distance * dir);
+                Vector3 targetPoint = target.parent.TransformPoint(sx, chaseHeight, distance * dir);
+                transform.position = targetPoint;
+                //transform.position = Vector3.Lerp(transform.position, targetPoint, Time.deltaTime * Smoothing);
                 if (chaseSmoothRotation) {
                     Quaternion wantedRot = Quaternion.LookRotation(target.position - transform.position, target.up);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, wantedRot, Time.deltaTime * chaseRotationDamping);
+                    transform.rotation = wantedRot;
+                    //transform.rotation = Quaternion.Lerp(transform.rotation, wantedRot, Time.deltaTime * chaseRotationDamping);
                 }
                 else
                     transform.LookAt(target, target.up);
@@ -173,8 +180,6 @@ public class MouseOrbitImproved : MonoBehaviour {
     public void SetInputEnable(bool enabled) {
         inputEnabled = enabled;
         mouseClickEnabled = enabled;
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
     }
 
     public void SetAimPoint(Vector3 point) {

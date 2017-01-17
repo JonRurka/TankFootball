@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System;
 
 public class GamePlay : MonoBehaviour, IGamePlayController {
     public class TeamStats {
@@ -52,21 +53,21 @@ public class GamePlay : MonoBehaviour, IGamePlayController {
 
 	// Use this for initialization
 	void Start () {
-
+        
     }
 	
 	// Update is called once per frame
 	void Update () {
-        /*if (Input.GetKeyDown(KeyCode.Z)) {
+        if (Input.GetKeyDown(KeyCode.Z)) {
             GameBall.Instance.GiveBall(0);
         }
         if (Input.GetKeyDown(KeyCode.F)) {
-            FeildGoal(PlayerControl.Instance.GetTank(0), GameLobby.Team.TeamA, 0);
-        }*/
+            FeildGoal(GameControl.Instance.GetUser(0), GameLobby.Team.TeamA, 0);
+        }
 
         /*foreach (CountDown count in Countdowns.Values) {
             count.Update(Time.deltaTime);
-        }*/
+        }*
         
     }
 
@@ -130,6 +131,18 @@ public class GamePlay : MonoBehaviour, IGamePlayController {
         }*/
     }
 
+    private void OnGUI() {
+        GUI.Label(new Rect((float)(Screen.width * 9 / 10), 10f, 100f, 20f), string.Concat(this.Stats[GameLobby.Team.TeamA].Score, " :TeamA"));
+        GUI.Label(new Rect((float)(Screen.width * 9 / 10), 30f, 100f, 20f), string.Concat(this.Stats[GameLobby.Team.TeamB].Score, " :TeamB"));
+    }
+
+    public void Takle(byte playerID, byte VictimID) {
+        Player user = GameControl.Instance.GetUser(playerID);
+        GameControl.Instance.GetUser(VictimID).Instance.SetEnabled(false);
+        this.IncreaseScore(user.Team, 1);
+        this.Reset(VictimID, 2f);
+    }
+
     public void IncreaseScore(GameLobby.Team team, int amount) {
         Stats[team].Score += amount;
         int aScore = Stats[GameLobby.Team.TeamA].Score;
@@ -156,12 +169,12 @@ public class GamePlay : MonoBehaviour, IGamePlayController {
     }
 
     public void FeildGoal(Player player, GameLobby.Team team, float xLocation) {
-        player.Instance.turrentInst.SetShootMode(TurretScript.ShootMode.Kickoff);
+        player.Instance.turrentInst.SetShootMode(TurretScript.ShootMode.Kick);
         GameBall.Instance.SpawnTee(xLocation, -1);
     }
 
     public void SideLineTanks() {
-        float offset = 2;
+        
         
     }
 
@@ -182,12 +195,21 @@ public class GamePlay : MonoBehaviour, IGamePlayController {
         }
     }
 
+    public Vector3 SetTank(Player tank) {
+        GameLobby.Team team = tank.Team;
+        GamePlay.TeamStats item = this.Stats[team];
+        item.Players.Add(tank.ID, tank);
+        int num = (team != GameLobby.Team.TeamA ? -1 : 1);
+        tank.GameObj.transform.position = new Vector3((float)(25 * num), 0f, 0f);
+        return tank.GameObj.transform.position;
+    }
+
     public void Reset(byte id, float time) {
         StartCoroutine(Reset_int(id, time));
     }
 
     public void CoinFlip() {
-        float cointVal = Random.value;
+        float cointVal = UnityEngine.Random.value;
         if (cointVal > .5f) {
             state = GameState.KickOff;
         }
@@ -204,5 +226,34 @@ public class GamePlay : MonoBehaviour, IGamePlayController {
         PlayerControl.Instance.SetPosition(id, new Vector3(50 * side, 0, 0), new Vector3(0, -side * 90, 0));
         user.Instance.SetEnabled(true);
         
+    }
+
+    public void StartGameCountDown(float time) {
+        this.CreateCountDown("StartGame", time, new Action(this.GameStarted_Callback), false);
+    }
+
+    public void StartGameTimer(float time) {
+        this.CreateCountDown("GameTimer", time, new Action(this.GameTimerEnd_Callback), false);
+    }
+
+    public void CreateCountDown(string name, float time, Action callback, bool repeat = false) {
+        if (!this.Countdowns.ContainsKey(name)) {
+            this.Countdowns.Add(name, new CountDown(this, name, time, callback, repeat));
+        }
+    }
+
+    public void RemoveCountDown(string name) {
+        if (this.Countdowns.ContainsKey(name)) {
+            this.Countdowns.Remove(name);
+        }
+    }
+
+    public void GameStarted_Callback() {
+        if (this.state == GamePlay.GameState.PreGame) {
+            this.CoinFlip();
+        }
+    }
+
+    public void GameTimerEnd_Callback() {
     }
 }

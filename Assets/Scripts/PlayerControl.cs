@@ -3,133 +3,58 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Timers;
 using System.Linq;
 using System.Text;
+using BEPUphysics;
+using BEPUphysics.Entities;
+using BEPUphysics.Entities.Prefabs;
+using bp = BEPUutilities;
 
 public class PlayerControl : MonoBehaviour {
-    public class MovementData {
-        public const int SendBufferLenght = 12;
-
-        public byte Id { get; private set; }
-        public Vector2 Location { get; private set; }
-        public Vector2 Velocity { get; private set; }
-        public float Rotation { get; private set; }
-        public Vector2 TurretRotation { get; private set; }
-        public float Sound { get; private set; }
-        public byte[] EncodedData { get; private set; }
-
-        public MovementData(byte id, Vector2 location, Vector2 velocity, float rotation, Vector2 turretRotation, float sound) {
-            this.Id = id;
-            this.Location = location;
-            this.Velocity = velocity;
-            this.Rotation = rotation;
-            this.TurretRotation = turretRotation;
-            this.Sound = Mathf.Clamp01(sound);
-            this.EncodedData = Encode();
-        }
-
-        public MovementData(byte[] encodedData) {
-            this.EncodedData = encodedData;
-            Decode();
-        }
-
-        public byte[] Encode() {
-            Int16 psx = ToShort(Location.x, 500); // position x
-            Int16 psz = ToShort(Location.y, 500); // position z
-            Int16 vsx = ToShort(Velocity.x, 600); // velocity x
-            Int16 vsz = ToShort(Velocity.y, 600); // velocity z
-            UInt16 rsy = ToUnsighedShort(Repeat(Rotation, 360), 90); // rotation y
-            UInt16 tsx = ToUnsighedShort(Repeat(TurretRotation.x, 360), 90); // turret rotation x
-            UInt16 tsy = ToUnsighedShort(Repeat(TurretRotation.y, 360), 90); // turret rotation y
-
-            byte[] pbx = ToByte(psx);
-            byte[] pby = ToByte(psz);
-            byte[] vbx = ToByte(vsx);
-            byte[] vbz = ToByte(vsz);
-            byte[] rby = ToByte(rsy);
-            byte[] tbx = ToByte(tsx);
-            byte[] tby = ToByte(tsy);
-            byte sb = (byte)Mathf.Clamp((Sound * 255), 0, 255);
-
-            byte[] sendBuffer = new byte[SendBufferLenght];
-            #region send Velocity
-            /*sendBuffer[0] = id;
-            sendBuffer[1] = pbx[0];
-            sendBuffer[2] = pbx[1];
-            sendBuffer[3] = pby[0];
-            sendBuffer[4] = pby[1];
-            sendBuffer[5] = vbx[0];
-            sendBuffer[6] = vbx[1];
-            sendBuffer[7] = vbz[0];
-            sendBuffer[8] = vbz[1];
-            sendBuffer[9] = rby[0];
-            sendBuffer[10] = rby[1];
-            sendBuffer[11] = tbx[0];
-            sendBuffer[12] = tbx[1];
-            sendBuffer[13] = tby[0];
-            sendBuffer[14] = tby[1];*/
-            #endregion
-            sendBuffer[0] = Id;
-            sendBuffer[1] = pbx[0];
-            sendBuffer[2] = pbx[1];
-            sendBuffer[3] = pby[0];
-            sendBuffer[4] = pby[1];
-            sendBuffer[5] = rby[0];
-            sendBuffer[6] = rby[1];
-            sendBuffer[7] = tbx[0];
-            sendBuffer[8] = tbx[1];
-            sendBuffer[9] = tby[0];
-            sendBuffer[10] = tby[1];
-            sendBuffer[11] = sb;
-
-            return sendBuffer;
-        }
-
-        public void Decode() {
-            #region send velocity
-            /*Int16 psx = PlayerControl.FromByte(new byte[] { encodedData[1], encodedData[2] });
-            Int16 psz = PlayerControl.FromByte(new byte[] { encodedData[3], encodedData[4] });
-            Int16 vsx = PlayerControl.FromByte(new byte[] { encodedData[5], encodedData[6] });
-            Int16 vsz = PlayerControl.FromByte(new byte[] { encodedData[7], encodedData[8] });
-            UInt16 rsy = PlayerControl.FromByteUnsigned(new byte[] { encodedData[9], encodedData[10] });
-            UInt16 tsx = PlayerControl.FromByteUnsigned(new byte[] { encodedData[11], encodedData[12] });
-            UInt16 tsy = PlayerControl.FromByteUnsigned(new byte[] { encodedData[13], encodedData[14] });*/
-            #endregion
-            Int16 psx = FromByte(new byte[] { EncodedData[1], EncodedData[2] });
-            Int16 psz = FromByte(new byte[] { EncodedData[3], EncodedData[4] });
-            UInt16 rsy = FromByteUnsigned(new byte[] { EncodedData[5], EncodedData[6] });
-            UInt16 tsx = FromByteUnsigned(new byte[] { EncodedData[7], EncodedData[8] });
-            UInt16 tsy = FromByteUnsigned(new byte[] { EncodedData[9], EncodedData[10] });
-            Sound = Mathf.Clamp01(EncodedData[11] / 255);
-
-            Location = new Vector2(ToFloat(psx, 500), ToFloat(psz, 500));
-            //velocity = new Vector2(PlayerControl.ToFloat(vsx, 600), PlayerControl.ToFloat(vsz, 600));
-            Rotation = ToFloat(rsy, 90);
-            TurretRotation = new Vector2(ToFloat(tsx, 90), ToFloat(tsy, 90));
-        }
-    }
 
     public static PlayerControl Instance;
-    public float sendCooldown = 1 / 15f;
+    public float sendCooldown = 1 / 10f;
     private float timer;
 
     public GameObject tankPrefab;
-    public List<Player> playerList = new List<Player>();
-    
-    
+    public Player[] playerList = new Player[0];
+    public bool TanksSet { get; private set; }
+    public int TankInstanceCount
+    {
+        get
+        {
+            int instances = 0;
+            foreach (Player player in new List<Player>(GameControl.Instance.players.Values)) {
+                if (player.TankExists)
+                    instances++;
+            }
+            return instances;
+        }
+    }
+
+    private int _sent = 0;
+    public int sentPS = 0;
+    public System.Diagnostics.Stopwatch watch;
+
+    private Timer sendTimer;
+
     void Awake() {
         Instance = this;
-        NetClient.Instance.AddCommands(this);
-        NetServer.Instance.AddCommands(this);
+        //NetClient.Instance.AddCommands(this);
+        //TanksSet = false;
     }
 
 	// Use this for initialization
 	void Start () {
-	
-	}
-	
-	// Update is called once per frame
-	void Update () {
+        MainServerConnect.Instance.AddCommands(this);
+        sendTimer = new Timer();
+        watch = new System.Diagnostics.Stopwatch();
+        watch.Start();
+    }
+
+    // Update is called once per frame
+    void Update () {
         if (GameControl.Instance.IsServer) {
             if (timer > 0)
                 timer -= Time.deltaTime;
@@ -137,18 +62,37 @@ public class PlayerControl : MonoBehaviour {
                 timer = 0;
             if (timer == 0) {
                 timer = sendCooldown;
-                UpdateClientPositions();
+                //UpdateClientPositions();
+                _sent++;
             }
         }
-        playerList.Clear();
-        playerList.AddRange(GameControl.Instance.players.Values.ToArray());
+        playerList = GameControl.Instance.players.Values.ToArray();
+
+        if (watch.Elapsed.Seconds >= 1) {
+            sentPS = _sent;
+            _sent = 0;
+            watch.Stop();
+            watch.Reset();
+            watch.Start();
+        }
     }
 
-    public void UpdateClientPositions() {
+    // OLD
+    /*public void SetServer() {
+        if (GameControl.Instance.IsServer) {
+            sendTimer.Elapsed += new ElapsedEventHandler(UpdateClientPositions);
+            sendTimer.Interval = sendCooldown * 1000;
+            sendTimer.Enabled = true;
+        }
+    }*/
+
+    // OLD
+    /*public void UpdateClientPositions(object source, ElapsedEventArgs e) {
         int playerBufferLength = MovementData.SendBufferLenght;
-        byte[] sendBuffer = new byte[GameControl.Instance.players.Count * playerBufferLength];
+        byte[] keys = GameControl.Instance.players.Keys.ToArray();
+        byte[] sendBuffer = new byte[keys.Length * playerBufferLength];
         int pindex = 0;
-        foreach (byte key in GameControl.Instance.players.Keys) {
+        foreach (byte key in keys) {
             int i = 0;
             try {
                 if (GameControl.Instance.players[key].TankExists) {
@@ -159,21 +103,21 @@ public class PlayerControl : MonoBehaviour {
                 }
                 pindex++;
             }
-            catch (Exception e) {
-                Debug.LogErrorFormat("{0}: {1}\n{2}", e.GetType(), e.Message, e.StackTrace);
-                Debug.LogError(pindex + ", " + i);
-                Debug.Break();
+            catch (Exception ex) {
+                SafeDebug.LogError(string.Format("{0}: {1}\n{2}", e.GetType(), ex.Message, ex.StackTrace));
+                SafeDebug.LogError(pindex + ", " + i);
             }
         }
-        NetServer.Instance.Send(NetClient.OpCodes.UpdatePositions, sendBuffer);
-    }
+        NetServer.Instance.Send(NetClient.OpCodes.UpdatePositions, sendBuffer, MainServerConnect.Instance.udpEnabled ? Protocal.Udp : Protocal.Tcp);
+    }*/
 
     public void SetPosition(byte id, Vector3 position, Vector3 euler) {
         GameControl.Instance.players[id].Instance.SetPosition(position);
         GameControl.Instance.players[id].Instance.SetRotation(euler);
     }
 
-    public void AddTank(byte id, bool updateOthers = false) {
+    // OLD
+    /*public void AddTank(byte id) {
         string sendStr = "";
         Player user = GameControl.Instance.GetUser(id);
         GameObject tank = (GameObject)Instantiate(tankPrefab, Vector3.zero, Quaternion.identity);
@@ -187,104 +131,195 @@ public class PlayerControl : MonoBehaviour {
         if (id == GameControl.Instance.netID)
             user.Instance.isOwner = true;
         user.Instance.ID = id;
-        sendStr += id + "★" + user.Name + "★" + ToShort(position.x, 500) + "," + ToShort(position.z, 500);
+        //sendStr = id + "★" + user.Name + "★" + ToShort(position.x, 500) + "," + ToShort(position.z, 500);
         //Debug.Log("Send string: " + sendStr);
-        SetClientTank(id, sendStr);
+        //SetClientTank(id, sendStr);
 
-    }
+    }*/
 
-    public void SetClientTank(byte userId, string updateStr) {
+    // OLD
+    /*public void SetClientTanks() {
         string sendStr = "";
         foreach (byte id in GameControl.Instance.players.Keys.ToArray()) {
-            if (id != userId && GameControl.Instance.players[id].TankExists) {
+            if (GameControl.Instance.players[id].TankExists) {
                 Player user = GameControl.Instance.GetUser(id);
                 Vector3 position = GameControl.Instance.players[id].GameObj.transform.position;
-                sendStr += id + "★" + user.Name + "★" + ToShort(position.x, 500) + "," + ToShort(position.z, 500) + "❤";
+                sendStr += id + "★" + user.Name + "★" + MovementData.ToShort(position.x, 500) + "," + MovementData.ToShort(position.z, 500) + "❤";
             }
         }
-        //Debug.Log(sendStr);
-        NetServer.Instance.Send(NetClient.OpCodes.AddTank, updateStr);
-        NetServer.Instance.Send(userId, NetClient.OpCodes.SetTanks, sendStr);
-    }
+
+        Debug.Log("Set Tank:" + sendStr);
+        NetServer.Instance.Send(NetClient.OpCodes.SetTanks, sendStr);
+        TanksSet = true;
+    }*/
 
     public void RemoveTank(byte id) {
         if (GameControl.Instance.UserExists(id)) {
-            Destroy(GameControl.Instance.players[id].GameObj);
-            NetServer.Instance.Send(NetClient.OpCodes.RemoveTank, new byte[] { id });
+            GameControl.Instance.GetUser(id).DestroyTank();
+            //NetServer.Instance.Send(NetClient.OpCodes.RemoveTank, new byte[] { id });
         }
         else
             Debug.Log("ID not found: " + id);
     }
 
-    public static short ToShort(float value, float scale) {
-        return (short)(value * scale);
-    }
-
-    public static float ToFloat(short value, float scale) {
-        return (value / scale);
-    }
-
-    public static ushort ToUnsighedShort(float value, float scale) {
-        return (ushort)(value * scale);
-    }
-
-    public static float ToFloat(ushort value, float scale) {
-        return (value / scale);
-    }
-
-    public static byte[] ToByte(Int16 value) {
-        return BitConverter.GetBytes(value);
-    }
-
-    public static Int16 FromByte(byte[] value) {
-        return BitConverter.ToInt16(value, 0);
-    }
-
-    public static byte[] ToByte(UInt16 value) {
-        return BitConverter.GetBytes(value);
-    }
-
-    public static UInt16 FromByteUnsigned(byte[] value) {
-        return BitConverter.ToUInt16(value, 0);
-    }
-
-    public static float Repeat(float value, float mod) {
-        float result = value % mod;
-        if (result < 0)
-            result += mod;
-        return result;
-    }
-
     public void Close() {
-        foreach (byte pID in GameControl.Instance.players.Keys) {
-            Destroy(GameControl.Instance.players[pID].GameObj);
-            GameControl.Instance.players[pID].Instance = null;
+        foreach (Player player in GameControl.Instance.players.Values) {
+            player.DestroyTank();
+        }
+        playerList = new Player[0];
+        sendTimer.Enabled = false;
+    }
+
+    public void OnDisable() {
+        sendTimer.Enabled = false;
+    }
+
+    [Command(ClientCMD.SetTanks)]
+    public void SetTanks_CMD(Data data) {
+        DataEntries ent = DataDecoder.Decode(data.Buffer, DataTypePresets.SetTanks);
+        byte count = (byte)ent.GetEntryValue(0);
+        byte[] ent2Buff = (byte[])ent.GetEntryValue(1);
+        DataTypes[] metaData = new DataTypes[count];
+        for (int i = 0; i < count; i++)
+            metaData[i] = DataTypes.Buffer;
+        DataEntries ent2 = DataDecoder.Decode(ent2Buff, metaData);
+        for (int p = 0; p < count; p++) {
+            DataEntries ent3 = DataDecoder.Decode((byte[])ent2.GetEntryValue(p), DataTypePresets.SetTanksData);
+            byte id = (byte)ent3.GetEntryValue(0);
+            Vector2 sPos = (Vector2)ent3.GetEntryValue(1);
+            byte rot = (byte)ent3.GetEntryValue(2);
+            float maxS = (float)ent3.GetEntryValue(3);
+            Player user = GameControl.Instance.GetUser(id);
+            if (user != null && !user.TankExists) {
+                Vector3 position = new Vector3(TankState.Scale(sPos.x, Int16.MinValue, Int16.MaxValue, -63, 63), 0,
+                                               TankState.Scale(sPos.y, Int16.MinValue, Int16.MaxValue, -63, 63));
+                float rotation = TankState.Scale(rot, 0, 255, 0, 360);
+                GameObject obj = Instantiate(tankPrefab, position, Quaternion.AngleAxis(rotation, Vector3.up));
+                obj.name = user.Name;
+                user.SetTank(obj);
+                user.Instance.ID = id;
+                user.Instance.m_Speed = maxS;
+                if (id == GameControl.Instance.netID) {
+                    GameControl.Instance.SetMouseLocked(true);
+                    user.Instance.isOwner = true;
+                    Debug.LogFormat("{0}: set owner.", user.Name);
+                }
+                Debug.LogFormat("Set Tanks: Adding new tank {0}({1}) at {2}.", user.Name, id, position);
+            }
         }
     }
 
+    [Command(ClientCMD.UpdateOwnerTankPosition, true)]
+    public void UpdateOwnerTankPosition_CMD(Data data) {
+        DataEntries ent = DataDecoder.Decode(data.Buffer, DataTypePresets.UpdateOwnerTankPosition);
+        ushort receivedNum = (ushort)ent.GetEntryValue(0);
+        byte[] playerBuff = (byte[])ent.GetEntryValue(1);
+        TankState state = new TankState(playerBuff);
+        if (GameControl.Instance.UserExists(GameControl.Instance.netID)) {
+            Player user = GameControl.Instance.GetUser();
+            if (user != null)
+                if (user.TankExists) {
+                    user.Instance.SetOwnerState(receivedNum, state);
+                }
+                else
+                    Debug.LogErrorFormat("{0}: user instance null!", user.Name);
+            else
+                Debug.LogError("user null!");
+        }
+    }
+
+    [Command(ClientCMD.UpdateClientTankPosition)]
+    public void UpdateClientTankPosition_CMD(Data data) {
+        DataEntries ent = DataDecoder.Decode(data.Buffer, DataTypePresets.UpdateClientTankPosition);
+        byte count = (byte)ent.GetEntryValue(0);
+        byte[] ent2Buff = (byte[])ent.GetEntryValue(1);
+        DataTypes[] metaData = new DataTypes[count];
+        for (int i = 0; i < count; i++) {
+            metaData[i] = DataTypes.Buffer;
+        }
+        DataEntries ent2 = DataDecoder.Decode(ent2Buff, metaData);
+        for (int i = 0; i < count; i++) {
+            byte[] playerBuff = (byte[])ent2.GetEntryValue(i);
+            TankState state = new TankState(playerBuff);
+            if (GameControl.Instance.UserExists(state.Id)) {
+                Player user = GameControl.Instance.GetUser(state.Id);
+                if (user.TankExists) {
+                    if (!user.Instance.isOwner) {
+                        user.Instance.SetPlayerData(state);
+                    }
+                }
+                else {
+                    Debug.LogWarning("Tank doesn't exist: " + user.ID);
+                }
+            }
+            else {
+                Debug.LogError("Player id not found: " + state.Id);
+            }
+        }
+    }
+
+    [Command(ClientCMD.RemovePlayer)]
+    public void RemovePlayer_CMD(Data data) {
+        if (GameControl.Instance.UserExists(data.Buffer[0])) {
+            GameControl.Instance.GetUser(data.Buffer[0]).DestroyTank();
+        }
+    }
+
+    [Command(ClientCMD.SetShootMode)]
+    public void SetShootMode_CMD(Data data) {
+        Player player = GameControl.Instance.GetUser();
+        if (player != null && player.TankExists) {
+            player.Instance.turrentInst.SetShootMode((TurretScript.ShootMode)data.Buffer[0]);
+        }
+    }
+
+    [Command(ClientCMD.ShootFx)]
+    public void ShootFx_CMD(Data data) {
+        if (GameControl.Instance.GameStarted) {
+            if (GameControl.Instance.UserExists(data.Buffer[0])) {
+                Player player = GameControl.Instance.GetUser(data.Buffer[0]);
+                if (player != null && player.TankExists) {
+                    TurretScript.ShootMode mode = (TurretScript.ShootMode)data.Buffer[1];
+                    player.Instance.turrentInst.ClientShootEffect(mode);
+                }
+            }
+        }
+    }
+
+    // ----------------- OLD ----------------- 
+
     // Server commands
 
-    [ServerCommand(NetServer.OpCodes.SubmitInput)]
+    // OLD
+    /*[ServerCommand(NetServer.OpCodes.SubmitInput)]
     public Traffic SubmitInput_CMD(Player user, byte[] data) {
         if (GameControl.Instance.UserExists(user.ID) && user.TankExists) {
             try {
-                byte vert = data[0];
-                byte horz = data[1];
-                byte[] bx = { data[2], data[3] };
-                byte[] by = { data[4], data[5] };
-                UInt16 sx = FromByteUnsigned(bx);
-                UInt16 sy = FromByteUnsigned(by);
-                Vector2 turretRot = new Vector2(ToFloat(sx, 90), ToFloat(sy, 90));
-                user.Instance.SetInput(vert, horz, turretRot);
+                short sentNum = BitConverter.ToInt16(data, 0);
+                byte inputBitFlags = data[2];
+                InputData input = new InputData(inputBitFlags);
+                float tx = MovementData.Scale(data[3], 0, 255, 0, 360);
+                float ty = MovementData.Scale(data[4], 0, 255, 0, 360);
+                Vector2 turretRot = new Vector2(tx, ty);
+                user.Instance.SetInput(sentNum, input, turretRot);
             }
             catch (Exception e) {
                 Debug.LogErrorFormat("{0}: {1}\n{2}", e.GetType(), e.Message, e.StackTrace);
             }
         }
         return default(Traffic);
-    }
+    }*/
 
-    [ServerCommand(NetServer.OpCodes.Shoot)]
+    // OLD
+    /*[ServerCommand(NetServer.OpCodes.SubmitPosition)]
+    public Traffic SubmitPosition_CMD(Player user, byte[] data) {
+        MovementData movement = new MovementData(data);
+        user.Instance.SetPlayerData(movement);
+        return default(Traffic);
+    }*/
+
+    // OLD
+    /*[ServerCommand(NetServer.OpCodes.Shoot)]
     public Traffic Shoot_CMD(Player user, byte[] data) {
         if (user != null && user.TankExists) {
             TankMovement tank = user.Instance;
@@ -293,15 +328,18 @@ public class PlayerControl : MonoBehaviour {
         else
             Debug.LogError("Player null: " + user.ID);
         return default(Traffic);
-    }
+    }*/
 
 
     // client commands
 
-    [ClientCommand(NetClient.OpCodes.SetTanks)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.SetTanks)]
     public void SetTanks_CMD(byte[] data) {
         if (GameControl.Instance.IsServer)
             return;
+
+        Debug.Log("Set Tank");
 
         string input = Encoding.UTF8.GetString(data);
         string[] instances = input.Split(new char[] { '❤' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -314,8 +352,8 @@ public class PlayerControl : MonoBehaviour {
                 if (posParts.Length == 2) {
                     short sx = short.Parse(posParts[0]);
                     short sz = short.Parse(posParts[1]);
-                    if (!GameControl.Instance.UserExists(id)) {
-                        Vector3 position = new Vector3(ToFloat(sx, 500), 0, ToFloat(sz, 500));
+                    if (!GameControl.Instance.GetUser(id).TankExists) {
+                        Vector3 position = new Vector3(MovementData.ToFloat(sx, 500), 0, MovementData.ToFloat(sz, 500));
                         GameObject obj = (GameObject)Instantiate(tankPrefab, position, Quaternion.identity);
                         obj.name = name;
                         Player player = GameControl.Instance.GetUser(id);
@@ -325,17 +363,25 @@ public class PlayerControl : MonoBehaviour {
                         player.Instance.ID = id;
                         Debug.LogFormat("Set Tanks: Adding new tank {0}({1}) at {2}.", name, id, position);
                     }
+                    else
+                        Debug.LogWarning("Set Tank: User doesn't exist: " + id);
                 }
+                else
+                    Debug.LogWarning("Set Tank: Invalid format 2 (" + id + "): " + posParts);
             }
+            else
+                Debug.LogWarning("Set Tank: Invalid format 1: " + instances[i]);
         }
-    }
+    }*/
 
-    [ClientCommand(NetClient.OpCodes.AddTank)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.AddTank)]
     public void AddTank_CMD(byte[] data) {
         if (GameControl.Instance.IsServer)
             return;
 
         string input = Encoding.UTF8.GetString(data);
+        Debug.Log("Add Tank: " + input + "\nByte: " + BitConverter.ToString(data));
         //Debug.Log(input);
         string[] parts = input.Split('★');
         if (parts.Length == 3) {
@@ -345,7 +391,7 @@ public class PlayerControl : MonoBehaviour {
             if (posParts.Length == 2) {
                 short sx = short.Parse(posParts[0]);
                 short sz = short.Parse(posParts[1]);
-                Vector3 position = new Vector3(ToFloat(sx, 500), 0, ToFloat(sz, 500));
+                Vector3 position = new Vector3(MovementData.ToFloat(sx, 500), 0, MovementData.ToFloat(sz, 500));
                 GameObject obj = (GameObject)Instantiate(tankPrefab, position, Quaternion.identity);
                 obj.name = name;
                 Player player = GameControl.Instance.GetUser(id);
@@ -357,25 +403,27 @@ public class PlayerControl : MonoBehaviour {
                 
             }
             else {
-                Debug.LogError("location incorrectfully formated");
+                Debug.LogWarning("Add Tank: location incorrectfully formated: " + input);
             }
         }
         else {
-            Debug.LogError("invalid formate");
+            Debug.LogWarning("Add Tank: invalid format: " + input);
         }
-    }
+    }*/
 
-    [ClientCommand(NetClient.OpCodes.RemoveTank)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.RemoveTank)]
     public void RemoveTank_CMD(byte[] data) {
         byte id = data[0];
         if (GameControl.Instance.UserExists(id)) {
-            Destroy(GameControl.Instance.players[id].GameObj);
+            GameControl.Instance.GetUser(id).DestroyTank();
         }
         else
             Debug.Log("ID not found: " + id);
-    }
+    }*/
 
-    [ClientCommand(NetClient.OpCodes.UpdatePositions)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.UpdatePositions)]
     public void UpdatePositions_CMD(byte[] data) {
         if (!GameControl.Instance.IsServer) {
             int playerBufferLength = MovementData.SendBufferLenght;
@@ -385,33 +433,67 @@ public class PlayerControl : MonoBehaviour {
                     playerBuffer[i] = data[pindex * playerBufferLength + i];
                 }
                 byte id = playerBuffer[0];
-                if (GameControl.Instance.UserExists(id))
-                    if (GameControl.Instance.players[id].TankExists) {
-                        GameControl.Instance.players[id].Instance.SetPlayerData(new MovementData(playerBuffer));
+                if (GameControl.Instance.UserExists(id)) {
+                    Player user = GameControl.Instance.GetUser(id);
+                    if (user.TankExists) {
+                        if (!user.Instance.isOwner) {
+                            user.Instance.SetPlayerData(new MovementData(playerBuffer));
+                        }
                     }
-                    else
-                        Debug.LogError("Tank not created: " + id);
+                    else {
+                        Debug.LogWarning("Tank no exist: " + user.ID);
+                    }
+                }
                 else
-                    Debug.LogError("Tank id not found: " + id);
+                    Debug.LogError("player id not found: " + id);
             }
         }
-    }
+    }*/
 
-    [ClientCommand(NetClient.OpCodes.Shoot)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.UpdateTankPosition)]
+    public void UpdateTankPosition_CMD(byte[] data) {
+        if (data.Length == MovementData.SendBufferLenght + 2) {
+            
+            short receivedNum = BitConverter.ToInt16(data, 0);
+            int playerBufferLength = MovementData.SendBufferLenght;
+            byte[] playerBuffer = new byte[playerBufferLength];
+            Array.Copy(data, 2, playerBuffer, 0, playerBufferLength);
+            MovementData moveData = new MovementData(playerBuffer);
+            //Debug.LogFormat("Client: {0} - {1}, {2}\n{3} ", GameControl.Instance.netID, receivedNum, moveData.ToString(), BitConverter.ToString(playerBuffer));
+            if (GameControl.Instance.UserExists(moveData.Id)) {
+                GameControl.Instance.GetUser(moveData.Id).Instance.SetOwnerData(receivedNum, moveData);
+            }
+        }
+        else {
+            Debug.LogError("UpdateTankPosition_CMD: Invalid length!");
+        }
+        
+    }*/
+
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.Shoot)]
     public void Clientshoot_CMD(byte[] data) {
         Player player = GameControl.Instance.GetUser(data[0]);
         if (player != null) {
             TankMovement tank = player.Instance;
             tank.turrentInst.ClientShootEffect((TurretScript.ShootMode)data[1]);
         }
-    }
+    }*/
 
-    [ClientCommand(NetClient.OpCodes.SetEnabled)]
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.SetEnabled)]
     public void SetEnabled_CMD(byte[] data) {
         byte id = data[0];
         bool tankEnabled = BitConverter.ToBoolean(data, 1);
         if (GameControl.Instance.UserExists(id))
             GameControl.Instance.players[id].Instance.SetEnabled(tankEnabled);
-    }
+    }*/
 
+    // OLD
+    /*[ClientCommand(NetClient.OpCodes.SetMaxSpeed)]
+    public void SetMaxSpeed_CMD(byte[] data) {
+        float speed = BitConverter.ToSingle(data, 0);
+        GameControl.Instance.GetUser().Instance.SetMaxSpeed(speed);
+    }*/
 }

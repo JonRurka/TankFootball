@@ -14,6 +14,7 @@ public class NetServer : MonoBehaviour {
         GetLobby,
         GameOpen,
         SubmitInput,
+        SubmitPosition,
         Shoot,
         Ping,
         Close
@@ -87,7 +88,6 @@ public class NetServer : MonoBehaviour {
 
     public void RemoveUser(byte userID, string reason, bool removed) {
         if (!removed)
-            Send(userID, NetClient.OpCodes.Close, reason);
         GameControl.Instance.RemoveUser(userID);
     }
 
@@ -100,61 +100,61 @@ public class NetServer : MonoBehaviour {
         MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Close, sendBuffer));
     }
 
-    public void Send(NetClient.OpCodes command) {
-        Send(command, new byte[0]);
+    public void Send(NetClient.OpCodes command, Protocal type = Protocal.Tcp) {
+        Send(command, new byte[0], type);
     }
 
-    public void Send(NetClient.OpCodes command, string data) {
-        Send(command, Encoding.UTF8.GetBytes(data));
+    public void Send(NetClient.OpCodes command, string data, Protocal type = Protocal.Tcp) {
+        Send(command, Encoding.UTF8.GetBytes(data), type);
     }
 
-    public void Send(NetClient.OpCodes command, byte[] data) {
-        Send(new Traffic(command, data));
+    public void Send(NetClient.OpCodes command, byte[] data, Protocal type = Protocal.Tcp) {
+        Send(new Traffic(command, data), type);
     }
 
-    public void Send(Traffic traffic) {
+    public void Send(Traffic traffic, Protocal type = Protocal.Tcp) {
         byte[] sendBuffer = BufferEdit.AddFirst(255, BufferEdit.AddFirst(traffic.byteCommand, traffic.byteData));
-        MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer));
+        MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer), type);
     }
 
-    public void Send(byte[] users, NetClient.OpCodes command) {
-        Send(users, command, new byte[0]);
+    public void Send(byte[] users, NetClient.OpCodes command, Protocal type = Protocal.Tcp) {
+        Send(users, command, new byte[0], type);
     }
 
-    public void Send(byte[] users, NetClient.OpCodes command, string data) {
-        Send(users, command, Encoding.UTF8.GetBytes(data));
+    public void Send(byte[] users, NetClient.OpCodes command, string data, Protocal type = Protocal.Tcp) {
+        Send(users, command, Encoding.UTF8.GetBytes(data), type);
     }
 
-    public void Send(byte[] users, NetClient.OpCodes command, byte[] data) {
-        Send(users, new Traffic(command, data));
+    public void Send(byte[] users, NetClient.OpCodes command, byte[] data, Protocal type = Protocal.Tcp) {
+        Send(users, new Traffic(command, data), type);
     }
 
-    public void Send(byte[] users, Traffic traffic) {
+    public void Send(byte[] users, Traffic traffic, Protocal type = Protocal.Tcp) {
         List<byte> sendBuffer = new List<byte>();
         sendBuffer.Add((byte)users.Length);
         sendBuffer.AddRange(users);
         sendBuffer.AddRange(BufferEdit.AddFirst(traffic.byteCommand, traffic.byteData));
-        MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer.ToArray()));
+        MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer.ToArray()), type);
     }
 
-    public void Send(byte user, NetClient.OpCodes command) {
-        Send(user, command, new byte[0]);
+    public void Send(byte user, NetClient.OpCodes command, Protocal type = Protocal.Tcp) {
+        Send(user, command, new byte[0], type);
     }
 
-    public void Send(byte user, NetClient.OpCodes command, string data) {
-        Send(user, command, Encoding.UTF8.GetBytes(data));
+    public void Send(byte user, NetClient.OpCodes command, string data, Protocal type = Protocal.Tcp) {
+        Send(user, command, Encoding.UTF8.GetBytes(data), type);
     }
 
-    public void Send(byte user, NetClient.OpCodes command, byte[] data) {
-        Send(user, new Traffic(command, data));
+    public void Send(byte user, NetClient.OpCodes command, byte[] data, Protocal type = Protocal.Tcp) {
+        Send(user, new Traffic(command, data), type);
     }
 
-    public void Send(byte user, Traffic traffic) {
+    public void Send(byte user, Traffic traffic, Protocal type = Protocal.Tcp) {
         if (GameControl.Instance.UserExists(user)) {
             List<byte> sendBuffer = new List<byte>();
             sendBuffer.AddRange(new byte[] { 1, user });
             sendBuffer.AddRange(BufferEdit.AddFirst(traffic.byteCommand, traffic.byteData));
-            MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer.ToArray()));
+            MainServerConnect.Instance.SendServer(new Traffic(MainServerConnect.ServerOpCodes.Route, sendBuffer.ToArray()), type);
         }
     }
 

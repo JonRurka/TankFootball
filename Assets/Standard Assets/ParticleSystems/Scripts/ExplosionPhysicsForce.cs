@@ -8,7 +8,7 @@ public class ExplosionPhysicsForce : MonoBehaviour
 {
     public float explosionForce = 4;
 
-    public bool IsClient = false;
+    public bool IsClient = true;
 
 
     private IEnumerator Start()

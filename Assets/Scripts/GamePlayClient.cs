@@ -7,7 +7,7 @@ public class GamePlayClient : MonoBehaviour, IGamePlayController {
     public IGamePlayController instance { get { return Instance; } }
     public static GamePlayClient Instance;
 
-    public Dictionary<GameLobby.Team, GamePlay.TeamStats> Stats;
+    public Dictionary<GameLobby.Team, TeamStats> Stats;
     public Dictionary<string, CountDown> Countdowns;
 
 
@@ -18,9 +18,9 @@ public class GamePlayClient : MonoBehaviour, IGamePlayController {
     // Use this for initialization
     void Start () {
         Countdowns = new Dictionary<string, CountDown>();
-        Stats = new Dictionary<GameLobby.Team, GamePlay.TeamStats>();
-        Stats.Add(GameLobby.Team.TeamA, new GamePlay.TeamStats(GameLobby.Team.TeamA));
-        Stats.Add(GameLobby.Team.TeamB, new GamePlay.TeamStats(GameLobby.Team.TeamB));
+        Stats = new Dictionary<GameLobby.Team, TeamStats>();
+        Stats.Add(GameLobby.Team.TeamA, new TeamStats(GameLobby.Team.TeamA));
+        Stats.Add(GameLobby.Team.TeamB, new TeamStats(GameLobby.Team.TeamB));
     }
 	
 	// Update is called once per frame
@@ -30,14 +30,24 @@ public class GamePlayClient : MonoBehaviour, IGamePlayController {
         }
 	}
 
-    void OnGUI() {
-        GUI.Label(new Rect(Screen.width * 9 / 10, 10, 100, 20), Stats[GameLobby.Team.TeamA].Score + " :TeamA");
-        GUI.Label(new Rect(Screen.width * 9 / 10, 30, 100, 20), Stats[GameLobby.Team.TeamB].Score + " :TeamB");
+    public void GUIUpdate() {
+        //GUI.Label(new Rect(Screen.width * 9 / 10, 10, 100, 20), Stats[GameLobby.Team.TeamA].Score + " :TeamA");
+        //GUI.Label(new Rect(Screen.width * 9 / 10, 30, 100, 20), Stats[GameLobby.Team.TeamB].Score + " :TeamB");
     }
 
     public void SetScore(int teamA, int teamB) {
         Stats[GameLobby.Team.TeamA].Score = teamA;
         Stats[GameLobby.Team.TeamB].Score = teamB;
+    }
+
+    public void AddPlayer(Player player) {
+        if (!Stats[player.Team].Players.ContainsKey(player.ID))
+            Stats[player.Team].Players.Add(player.ID, player);
+    }
+
+    public void RemovePlayer(Player player) {
+        if (Stats[player.Team].Players.ContainsKey(player.ID))
+            Stats[player.Team].Players.Remove(player.ID);
     }
 
     public void StartGameCountDown(float time) {

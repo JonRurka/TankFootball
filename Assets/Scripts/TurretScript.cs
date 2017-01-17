@@ -4,13 +4,14 @@ using System.Collections;
 
 public class TurretScript : MonoBehaviour {
     public enum ShootMode {
-        none,
-        shortRange,
-        Kickoff,
-        pass,
+        None,
+        ShortRange,
+        Kick,
+        Pass,
     }
 
     public Transform gun;
+    public SphereCollider ballTrigger;
     public ArcRender arc;
     public LayerMask mask;
     public Camera cam;
@@ -39,18 +40,20 @@ public class TurretScript : MonoBehaviour {
     private Quaternion syncStartRotation;
     private Quaternion syncEndRotation;
 
-    private float oldTurrentXrot;
+    private float oldTurretXrot;
+    private float oldTurretYrot;
     private Quaternion baseRotation;
     private Quaternion targetRot;
     private Quaternion oldQuat;
 
     void Awake() {
-        movement = transform.root.GetComponent<TankMovement>();
+        movement = transform.root.GetComponentInChildren<TankMovement>();
     }
 
     // Use this for initialization
     void Start () {
         cam = GameObject.Find("Camera").GetComponent<Camera>();
+        arc = GetComponentInChildren<ArcRender>();
         launchVelocity = (minLaunchVelocity + maxLaunchVelocity) / 2;
         baseRotation = gun.localRotation;
     }
@@ -90,13 +93,55 @@ public class TurretScript : MonoBehaviour {
                 curAimPoint = gunHit.point;
             }
 
-            if (Enabled) {
+            if (Enabled && MouseOrbitImproved.Instance.inputEnabled) {
                 transform.eulerAngles = new Vector3(0, rotY, 0);
                 gun.localEulerAngles = new Vector3(rotX, 0, 0);
                 turretRotation = new Vector2(rotX, rotY);
+
+                if (movement.HasBall) {
+                    //launchVelocity += Input.GetAxis("Mouse ScrollWheel") * Time.deltaTime;
+                    if (Input.GetKey(KeyCode.R))
+                        launchVelocity += velocityIncrease * Time.deltaTime;
+                    if (Input.GetKey(KeyCode.F))
+                        launchVelocity -= velocityIncrease * Time.deltaTime;
+
+                    if (launchVelocity <= minLaunchVelocity)
+                        launchVelocity = minLaunchVelocity;
+                    if (launchVelocity >= maxLaunchVelocity)
+                        launchVelocity = maxLaunchVelocity;
+
+                    if (turretRotation.x != oldTurretXrot || turretRotation.y != oldTurretYrot) {
+                        oldTurretXrot = turretRotation.x;
+                        oldTurretYrot = turretRotation.y;
+                        Vector3 LocalRightDir = gun.localRotation * Vector3.forward;
+                        Vector3 velocity = new Vector3(0, LocalRightDir.y * launchVelocity, LocalRightDir.z * launchVelocity);
+                        arc.Render(Vector3.zero, velocity, -Physics.gravity.y);
+                    }
+
+                }
+
+                if (Input.GetKeyDown(KeyCode.Mouse0)) {
+                    byte[] buffer = new byte[0];
+                    DataEntries ent;
+                    switch (shootMode) {
+                        case ShootMode.Kick:
+                            ent = new DataEntries();
+                            ent.AddEntry(aimPoint);
+                            buffer = ent.Encode(false);
+                            break;
+                        case ShootMode.Pass:
+                            buffer = BitConverter.GetBytes(launchVelocity);
+                            break;
+                        case ShootMode.ShortRange:
+                            break;
+                    }
+
+                    MainServerConnect.Instance.Send(ServerCMD.Shoot, buffer);
+                    //NetClient.Instance.Send(NetServer.OpCodes.Shoot);
+                }
             }
 
-            if (movement.HasBall && Enabled) {
+            /*if (movement.HasBall && Enabled) {
                 if (Input.GetKey(KeyCode.R))
                     launchVelocity += velocityIncrease * Time.deltaTime;
                 if (Input.GetKey(KeyCode.F))
@@ -116,14 +161,14 @@ public class TurretScript : MonoBehaviour {
 
                 if (Input.GetKeyDown(KeyCode.Mouse0)) {
                     byte[] buffer = BitConverter.GetBytes(launchVelocity);
-                    NetClient.Instance.Send(NetServer.OpCodes.Shoot, buffer);
+                    //NetClient.Instance.Send(NetServer.OpCodes.Shoot, buffer);
                 }
             }
             else if (Enabled) {
                 if (Input.GetKeyDown(KeyCode.Mouse0)) {
-                    NetClient.Instance.Send(NetServer.OpCodes.Shoot);
+                    //NetClient.Instance.Send(NetServer.OpCodes.Shoot);
                 }
-            }
+            }*/
 
 
 
@@ -132,6 +177,9 @@ public class TurretScript : MonoBehaviour {
             //Vector3 rot = Quaternion.Lerp(syncStartRotation, syncEndRotation, syncTime / syncDelay).eulerAngles;
             //transform.eulerAngles = new Vector3(0, rot.y, 0);
             //gun.localEulerAngles = new Vector3(rot.x, 0, 0);
+
+            transform.eulerAngles = new Vector3(0, turretRotation.y, 0);
+            gun.localEulerAngles = new Vector3(turretRotation.x, 0, 0);
         }
 	}
 
@@ -140,13 +188,15 @@ public class TurretScript : MonoBehaviour {
     }
 
     public void GiveBall() {
-        shootMode = ShootMode.pass;
+        shootMode = ShootMode.Pass;
+        ballTrigger.enabled = false;
     }
 
     public void RemoveBall() {
+        Invoke("EnableTrigger", 0.5f);
         if (movement.isOwner) {
             arc.Disable();
-            shootMode = ShootMode.none;
+            shootMode = ShootMode.None;
         }
     }
 
@@ -164,8 +214,6 @@ public class TurretScript : MonoBehaviour {
             syncEndRotation = Quaternion.Euler(new Vector3(rotation.x, rotation.y, 0));*/
 
             turretRotation = rotation;
-            transform.eulerAngles = new Vector3(0, rotation.y, 0);
-            gun.localEulerAngles = new Vector3(rotation.x, 0, 0);
         }
     }
 
@@ -174,25 +222,25 @@ public class TurretScript : MonoBehaviour {
         Ray gunRay;
         RaycastHit gunHit;
         switch (shootMode) {
-            case ShootMode.Kickoff:
+            case ShootMode.Kick:
                 gunRay = new Ray(gun.position, gun.forward);
-                expSource.Play();
+                //expSource.Play();
                 if (Physics.Raycast(gunRay, out gunHit, 100)) {
                     Vector3 point = gunHit.point;
-                    GameObject exp = (GameObject)Instantiate(explosion, point, Quaternion.identity);
+                    GameObject exp = Instantiate(explosion, point, Quaternion.identity);
                     Destroy(exp, 5);
-                    if (gunHit.transform.tag == "Player") {
+                    /*if (gunHit.transform.tag == "Player") {
                         TankMovement enemyTank = gunHit.transform.root.GetComponent<TankMovement>();
                         if (enemyTank == null)
                             break;
                         GamePlay.Instance.Takle(movement.ID, enemyTank.ID);
-                    }
+                    }*/
                 }
                 break;
 
-            case ShootMode.pass:
+            case ShootMode.Pass:
                 if (movement.HasBall) {
-                    Debug.Log("in Buffer:" + BitConverter.ToString(data));
+                    //Debug.Log("in Buffer:" + BitConverter.ToString(data));
                     float forwardVelocity = BitConverter.ToSingle(data, 0);
                     //Debug.Log(gun.localRotation * Vector3.forward);
                     //Vector3 LocalRightDir = gun.rotation * Vector3.forward;
@@ -207,7 +255,7 @@ public class TurretScript : MonoBehaviour {
                 }
                 break;
 
-            case ShootMode.shortRange:
+            case ShootMode.ShortRange:
                 gunRay = new Ray(gun.position, gun.forward);
                 if (Physics.Raycast(gunRay, out gunHit, 2, mask)) {
                     curAimPoint = gunHit.point;
@@ -226,21 +274,24 @@ public class TurretScript : MonoBehaviour {
         Ray gunRay;
         RaycastHit gunHit;
         switch (mode) {
-            case ShootMode.Kickoff:
-                gunRay = new Ray(gun.position, gun.forward);
-                expSource.Play();
+            case ShootMode.Kick:
+                GameObject exp = Instantiate(explosion, aimPoint, Quaternion.identity);
+                exp.GetComponent<ExplosionPhysicsForce>().IsClient = true;
+                Destroy(exp, 5);
+                /*gunRay = new Ray(gun.position, gun.forward);
+                //expSource.Play();
                 if (Physics.Raycast(gunRay, out gunHit, 100)) {
                     Vector3 point = gunHit.point;
                     GameObject exp = (GameObject)Instantiate(explosion, point, Quaternion.identity);
                     exp.GetComponent<ExplosionPhysicsForce>().IsClient = true;
                     Destroy(exp, 5);
-                }
+                }*/
                 break;
 
-            case ShootMode.pass:
+            case ShootMode.Pass:
                 break;
 
-            case ShootMode.shortRange:
+            case ShootMode.ShortRange:
                 break;
         }
     }
@@ -251,7 +302,11 @@ public class TurretScript : MonoBehaviour {
 
     public void ObjectCaught(GameObject obj) {
         if (obj.tag == "GameBall" && GameControl.Instance.IsServer) {
-            
+            GamePlay.Instance.BallCatch(movement.ID);
         }
+    }
+
+    private void EnableTrigger() {
+        ballTrigger.enabled = true;
     }
 }

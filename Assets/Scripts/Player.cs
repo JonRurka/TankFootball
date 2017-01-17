@@ -4,12 +4,12 @@ using System.Collections;
 
 [Serializable]
 public class Player {
-    public byte ID { get; private set; }
-    public string Name { get; private set; }
-    public GameObject GameObj { get; set; }
-    public TankMovement Instance { get; set; }
-    public GameLobby.Team Team { get; set; }
-    public bool TankExists { get; private set; }
+    public byte ID;
+    public string Name;
+    public GameObject GameObj;
+    public TankMovement Instance;
+    public GameLobby.Team Team;
+    public bool TankExists;
 
     public Player(byte id, string name) {
         ID = id;
@@ -19,17 +19,19 @@ public class Player {
     public bool SetTank(GameObject tank) {
         if (tank != null) {
             GameObj = tank;
-            Instance = tank.GetComponent<TankMovement>();
+            Instance = tank.GetComponentInChildren<TankMovement>();
             if (Instance != null) {
                 TankExists = true;
             }
         }
+        else
+            Debug.LogFormat("{0}: Tank not set!", Name);
         return TankExists;
     }
 
     public void DestroyTank() {
         if (TankExists) {
-            GameObject.Destroy(GameObj);
+            UnityEngine.Object.Destroy(GameObj);
             GameObj = null;
             Instance = null;
             TankExists = false;
