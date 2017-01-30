@@ -95,6 +95,8 @@ public class MainServerConnect : MonoBehaviour {
     public string password;
     public string sessionKey;
     public string salt;
+    public byte[] ServerExponent;
+    public byte[] ServerPublicKey;
     private int _receivedBytes;
     private int _received;
     private int _sentBytes;

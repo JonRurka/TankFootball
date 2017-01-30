@@ -9,6 +9,8 @@ public class LobbyUIControl : UIPanelControl {
     public Button createMatchButton;
     public ScrollRect scrollView;
 
+    public LobbyChatUIControl chatControl;
+
     private LobbyScript.LobbyEntry[] matches;
     private Button[] matchButtons;
 
@@ -26,6 +28,7 @@ public class LobbyUIControl : UIPanelControl {
 
     public override void UIEnabled(bool enabled) {
         base.UIEnabled(enabled);
+        chatControl.ChatEnabled(enabled);
     }
 
     public override void SetMode(UIControl.UIType type) {

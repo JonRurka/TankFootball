@@ -31,7 +31,7 @@ public class TurretScript : MonoBehaviour {
 
     private Rigidbody body;
     private TankMovement movement;
-    private Vector3 aimPoint;
+    public Vector3 aimPoint;
     private Vector3 curAimPoint;
     private Vector3 screenPoint;
     private float lastSyncTime = 0f;

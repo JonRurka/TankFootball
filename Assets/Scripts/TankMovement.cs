@@ -185,11 +185,25 @@ public class TankMovement : MonoBehaviour {
             else {
                 m_Rigidbody.position = Vector3.Lerp(m_Rigidbody.position, serverState.Position, Time.deltaTime * syncSpeed);
             }*/
+            //Vector3 pos = m_Rigidbody.position;
+            //Quaternion rot = m_Rigidbody.rotation;
             float t = syncTime / syncDelay;
-            if (syncDelay == 0 || float.IsNaN(t))
+            if (syncDelay == 0 || float.IsNaN(t)) {
+                Debug.LogWarning("t is zer or nan!");
                 t = 1;
+            }
+            if (IsQuatZero(serverState.CurRotation) && IsQuatZero(serverState.Rotation)) {
+                serverState.Rotation = new Quaternion(0, 0, 0, 1);
+            }
+            Quaternion newRot = new Quaternion(0, 0, 0, 1);
+            try {
+                newRot = Quaternion.Lerp(serverState.CurRotation, serverState.Rotation, t); ;
+            }
+            catch(Exception) {
+                Debug.LogErrorFormat("Invalid Quat: {0}, {1} = {2}", serverState.CurRotation, serverState.Rotation, newRot);
+            }
             m_Rigidbody.position = Vector3.Lerp(serverState.CurPosition, serverState.Position, t);
-            m_Rigidbody.rotation = Quaternion.Lerp(serverState.CurRotation, serverState.Rotation, t);
+            m_Rigidbody.rotation = newRot;
 
 
             //Debug.LogFormat("{0} / {1} = {2}", syncTime, syncDelay, syncTime / syncDelay);
@@ -207,6 +221,9 @@ public class TankMovement : MonoBehaviour {
             //m_Rigidbody.rotation = syncEndRotation;
         }
         else {
+            if (IsQuatZero(serverState.CurRotation) && IsQuatZero(serverState.Rotation)) {
+                serverState.Rotation = new Quaternion(0, 0, 0, 1);
+            }
             m_Rigidbody.position = Vector3.Lerp(serverState.CurPosition, serverState.Position, syncTime / syncDelay);
             m_Rigidbody.rotation = Quaternion.Lerp(serverState.CurRotation, serverState.Rotation, syncTime / syncDelay);
 
@@ -614,5 +631,9 @@ public class TankMovement : MonoBehaviour {
         if (angle < -180)
             angle += 360;
         return angle;
+    }
+
+    private bool IsQuatZero(Quaternion quat) {
+        return quat.x == 0 && quat.y == 0 && quat.z == 0 && quat.w == 0;
     }
 }

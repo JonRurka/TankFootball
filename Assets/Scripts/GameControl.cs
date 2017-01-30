@@ -22,6 +22,7 @@ public class GameControl : MonoBehaviour {
 
     public GameObject ballPrefab;
     public Camera mainCam;
+    public Camera uiCamera;
 
     public GuiIndex gui;
     public string mainServerHost;
@@ -40,6 +41,8 @@ public class GameControl : MonoBehaviour {
     public Dictionary<byte, Player> players { get; private set; }
 
     public bool GameStarted;
+
+    public event Action<UserNameColors, string, string> OnChatMessageReceived;
 
     private bool register = false;
     private bool invalid;
@@ -256,18 +259,18 @@ public class GameControl : MonoBehaviour {
             SetMouseLocked(false);
             gui = GuiIndex.Lobby;
             UIControl.Instance.EnableLobby();
-            mainCam = FindObjectOfType<Camera>();
-            if (mainCam == null)
-                Debug.Log("null main camera!");
+            mainCam = GameObject.Find("Camera").GetComponent<Camera>();
+            uiCamera = GameObject.Find("UICamera").GetComponent<Camera>();
+            DisablePlayerCamera();
 
-            TaskQueue.QueueAsync("Test", () => {
+            /*TaskQueue.QueueAsync("Test", () => {
                 System.Threading.ManualResetEvent reset = new System.Threading.ManualResetEvent(false);
                 while(_run) {
                     byte[] countBuff = BitConverter.GetBytes(_count++);
                     MainServerConnect.Instance.Send(ServerCMD.test, BufferEdit.Add(countBuff, new byte[2048]));
                     //reset.WaitOne(1);
                 }
-            });
+            });*/
         }
         /*if (level == 2) {
             Debug.Log("game lobby scene open");
@@ -405,6 +408,10 @@ public class GameControl : MonoBehaviour {
         });
     }
 
+    public void SubmitChat(string message) {
+        MainServerConnect.Instance.Send(ServerCMD.Chat, message);
+    }
+
     // OLD
     /*public void StartServer() {
         gameBallObj = (GameObject)Instantiate(ballPrefab, Vector3.zero + Vector3.up, Quaternion.identity);
@@ -447,24 +454,12 @@ public class GameControl : MonoBehaviour {
     }
 
     public void EnablePlayCamera() {
-        mainCam.clearFlags = CameraClearFlags.Skybox;
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("Default");
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("TransparentFX");
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("Ignore Raycast");
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("Water");
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("Terrain");
-        mainCam.cullingMask |= 1 << LayerMask.NameToLayer("player");
+        mainCam.gameObject.SetActive(true);
         mainCam.GetComponent<MouseOrbitImproved>().enabled = true;
     }
 
     public void DisablePlayerCamera() {
-        mainCam.clearFlags = CameraClearFlags.SolidColor;
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("Default"));
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("TransparentFX"));
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("Ignore Raycast"));
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("Water"));
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("Terrain"));
-        mainCam.cullingMask &= ~(1 << LayerMask.NameToLayer("player"));
+        mainCam.gameObject.SetActive(false);
         mainCam.GetComponent<MouseOrbitImproved>().enabled = false;
     }
 
@@ -540,11 +535,17 @@ public class GameControl : MonoBehaviour {
     [Command(ClientCMD.DoLogin)]
     public void DoLogin_CMD(Data data) {
         DataEntries ent = DataDecoder.Decode(data.Buffer);
-        if (ent.Count == 2) {
-            MainServerConnect.Instance.salt = (string)ent.GetEntryValue(1);
+        if (ent.Count == 3 && (byte)ent.GetEntryValue(0) == 1) {
+            MainServerConnect.Instance.ServerExponent = (byte[])ent.GetEntryValue(1);
+            MainServerConnect.Instance.ServerPublicKey = (byte[])ent.GetEntryValue(2);
             string hashedPass = HashHelper.HashPasswordClient(password, MainServerConnect.Instance.salt);
-            string sendStr = hashedPass; // TODO: mac address
-            MainServerConnect.Instance.Send(ServerCMD.Login, sendStr); // send login request
+            byte[] encryData = HashHelper.RsaEncrypt(hashedPass, MainServerConnect.Instance.ServerExponent, MainServerConnect.Instance.ServerPublicKey);
+            MainServerConnect.Instance.Send(ServerCMD.Login, encryData);
+            //MainServerConnect.Instance.salt = (string)ent.GetEntryValue(1);
+            //string hashedPass = HashHelper.HashPasswordClient(password, MainServerConnect.Instance.salt);
+            //string hashedPass = HashHelper.MD5Hash(password);
+            //string sendStr = hashedPass; // TODO: mac address
+            //MainServerConnect.Instance.Send(ServerCMD.Login, sendStr); // send login request
         }
         else if (ent.Count == 1) {
             byte error = (byte)ent.GetEntryValue(0);
@@ -809,6 +810,16 @@ public class GameControl : MonoBehaviour {
         UIControl.Instance.EnableGame();
         gui = GuiIndex.Game;
         MainServerConnect.Instance.Send(ServerCMD.ClientGameOpen);
+    }
+
+    [Command(ClientCMD.UpdateChat)]
+    public void UpdateChat_CMD(Data data) {
+        DataEntries ent = DataDecoder.Decode(data.Buffer, DataTypePresets.ChatUpdate);
+        UserNameColors color = (UserNameColors)((byte)ent.GetEntryValue(0));
+        string username = (string)ent.GetEntryValue(1);
+        string message = (string)ent.GetEntryValue(2);
+        if (OnChatMessageReceived != null)
+            OnChatMessageReceived(color, username, message);
     }
 
     // ----------------- OLD ----------------- 

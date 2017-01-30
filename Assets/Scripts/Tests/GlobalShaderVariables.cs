@@ -8,8 +8,11 @@ public class GlobalShaderVariables : MonoBehaviour {
     [SerializeField]
     private Texture2D noiseOffsetTexture;
 
+    private Camera cam;
+
     private void Awake() {
-        Shader.SetGlobalTexture("_NoiseOffsets", this.noiseOffsetTexture);
+        cam = GetComponent<Camera>();
+        Shader.SetGlobalTexture("_NoiseOffsets", noiseOffsetTexture);
     }
 
     private void Update() {
@@ -18,7 +21,7 @@ public class GlobalShaderVariables : MonoBehaviour {
         Shader.SetGlobalVector("_CamUp", transform.up);
         Shader.SetGlobalVector("_CamForward", transform.forward);
         Shader.SetGlobalFloat("_AspectRatio", (float)Screen.width / (float)Screen.height);
-        Shader.SetGlobalFloat("_FieldOfView", Mathf.Tan(Camera.main.fieldOfView * Mathf.Deg2Rad * 0.5f) * 2f);
+        Shader.SetGlobalFloat("_FieldOfView", Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad * 0.5f) * 2f);
 
     }
 

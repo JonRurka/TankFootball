@@ -37,4 +37,8 @@ public static class DataTypePresets {
     public static DataTypes[] SetTanksData = new DataTypes[] {
         DataTypes.Byte, DataTypes.ShortVector2, DataTypes.Byte, DataTypes.Float,
     };
+
+    public static DataTypes[] ChatUpdate = new DataTypes[] {
+        DataTypes.Byte, DataTypes.String, DataTypes.String,
+    };
 }

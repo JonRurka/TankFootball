@@ -35,6 +35,36 @@ public static class HashHelper {
         return data;
     }
 
+    public static RSAParameters GenerateRsaParameters() {
+        RSACryptoServiceProvider RSA = new RSACryptoServiceProvider();
+        return RSA.ExportParameters(true);
+    }
+
+    public static byte[] RsaEncrypt(string data, byte[] exp, byte[] publicKey) {
+        return RsaEncrypt(Encoding.UTF8.GetBytes(data), exp, publicKey);
+    }
+
+    public static byte[] RsaEncrypt(byte[] data, byte[] exp, byte[] publicKey) {
+        byte[] encryptedData;
+        using (RSACryptoServiceProvider RSA = new RSACryptoServiceProvider()) {
+            RSAParameters RSAKeyInfo = new RSAParameters();
+            RSAKeyInfo.Exponent = exp;
+            RSAKeyInfo.Modulus = publicKey;
+            RSA.ImportParameters(RSAKeyInfo);
+            encryptedData = RSA.Encrypt(data, false);
+        }
+        return encryptedData;
+    }
+
+    public static byte[] RsaDecrypt(byte[] value, RSAParameters RSAKeyInfo) {
+        byte[] decryptedData;
+        using (RSACryptoServiceProvider RSA = new RSACryptoServiceProvider()) {
+            RSA.ImportParameters(RSAKeyInfo);
+            decryptedData = RSA.Decrypt(value, false);
+        }
+        return decryptedData;
+    }
+
     public static string MD5Hash(string value) {
         StringBuilder sBuilder = new StringBuilder();
         MD5 md5Hash = MD5.Create();

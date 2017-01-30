@@ -23,6 +23,7 @@ public enum ClientCMD {
     SetBallState,
     SetShootMode,
     ShootFx,
+    UpdateChat,
 }
 
 public enum ServerCMD {
@@ -44,6 +45,7 @@ public enum ServerCMD {
     test,
     GetBall, // debug
     SetKick, // debug
+    Chat,
 }
 
 public struct Data {
@@ -71,6 +73,13 @@ public enum PermissionLevel {
 public enum Protocal {
     Tcp,
     Udp
+}
+
+public enum UserNameColors {
+    White = 0, // user
+    Green = 1, // moderator
+    Red = 2, // admin
+    Yellow = 3, // system
 }
 
 public struct Traffic {
